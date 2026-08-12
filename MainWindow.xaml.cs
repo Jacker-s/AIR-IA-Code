@@ -394,10 +394,11 @@ public partial class MainWindow : Window
         {
             AddActivityStep(activity, activeProject is null ? "Preparando conversa local" : $"Carregando contexto de {Path.GetFileName(activeProject)}");
             var useProjectTools = true;
-            autonomousTask = BeginOrResumeAgentTask(prompt); AddActivityStep(activity, "Modo autônomo persistente · ferramentas reais habilitadas");
+            var continuationRequested = IsExplicitContinuationRequest(prompt);
+            autonomousTask = BeginOrResumeAgentTask(prompt, continuationRequested); AddActivityStep(activity, continuationRequested ? "Retomando tarefa solicitada · ferramentas reais habilitadas" : "Nova tarefa isolada · ferramentas reais habilitadas");
             var requestMessages = BuildRecentHistory(useProjectTools);
             requestMessages.Add(new Dictionary<string, string> { ["role"] = "user", ["content"] = prompt });
-            requestMessages.Insert(0, new Dictionary<string, string> { ["role"] = "system", ["content"] = activeProject is null ? BuildGeneralAgentContext() : BuildAgentContext() });
+            requestMessages.Insert(0, new Dictionary<string, string> { ["role"] = "system", ["content"] = (activeProject is null ? BuildGeneralAgentContext() : BuildAgentContext(continuationRequested)) + (continuationRequested ? "" : "\n\nA mensagem mais recente inicia uma NOVA tarefa. Não retome, execute nem mencione comandos pendentes de solicitações anteriores, a menos que o usuário peça explicitamente para continuar.") });
             string? bootstrapName = null; string? bootstrapOutput = null;
             if (useProjectTools && GetBootstrapTool(prompt) is { } bootstrap)
             {
@@ -701,11 +702,11 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(answer)) return true; var value = answer.ToLowerInvariant(); string[] markers = ["vou executar", "posso continuar", "você pode usar", "voce pode usar", "não tenho acesso", "nao tenho acesso", "forneça o caminho", "forneca o caminho", "não diga que vai executar", "ação inicial obrigatória", "continue a solicitação original"]; return markers.Any(value.Contains);
     }
-    string BuildAgentContext()
+    string BuildAgentContext(bool includePendingTask)
     {
-        var memory = saved.ProjectMemories.TryGetValue(ChatKey, out var remembered) ? remembered : "Nenhuma tarefa anterior registrada.";
-        var actions = saved.ProjectActions.TryGetValue(ChatKey, out var log) ? string.Join("\n", log.TakeLast(20)) : "Nenhuma ação anterior registrada.";
-        var pending = saved.AgentTasks.TryGetValue(TaskKey, out var task) ? $"Objetivo: {task.Objective}\nEstado: {task.Status}\nÚltima etapa: {task.LastStep}\nPróxima etapa: {task.NextStep}\nFerramentas usadas: {task.ToolCalls}" : "Nenhuma tarefa persistente.";
+        var memory = includePendingTask && saved.ProjectMemories.TryGetValue(ChatKey, out var remembered) ? remembered : "Não usar memória de tarefa anterior nesta nova solicitação.";
+        var actions = includePendingTask && saved.ProjectActions.TryGetValue(ChatKey, out var log) ? string.Join("\n", log.TakeLast(20)) : "Não retomar ações anteriores.";
+        var pending = includePendingTask && saved.AgentTasks.TryGetValue(TaskKey, out var task) ? $"Objetivo: {task.Objective}\nEstado: {task.Status}\nÚltima etapa: {task.LastStep}\nPróxima etapa: {task.NextStep}\nFerramentas usadas: {task.ToolCalls}" : "Nenhuma tarefa persistente deve ser retomada.";
         return $$$"""
 Você é o agente principal de programação do AIR IA Code, desenvolvido por Codename Jackers. Tem acesso completo e exclusivo à pasta: {{{activeProject}}}
 Trabalhe de forma autônoma por quantas etapas forem necessárias. Primeiro entenda a arquitetura, depois planeje internamente, execute, observe cada retorno real, corrija falhas e valide o resultado.
@@ -747,9 +748,9 @@ Nunca invente uma execução: use a ferramenta e informe código de saída e res
         var files = EnumerateProjectFiles(activeProject, "*", maxFiles).Select(path => Path.GetRelativePath(activeProject, path).Replace('\\', '/')).OrderBy(path => path).ToList();
         return GetProjectSummary() + $"\nArquivos mapeados: {files.Count}" + (files.Count == 0 ? "" : "\n" + string.Join("\n", files));
     }
-    AgentTaskState BeginOrResumeAgentTask(string objective)
+    static bool IsExplicitContinuationRequest(string prompt) => prompt.StartsWith("/continuar", StringComparison.OrdinalIgnoreCase) || prompt.StartsWith("continue a tarefa autônoma pendente", StringComparison.OrdinalIgnoreCase) || prompt.StartsWith("retome a tarefa autônoma pendente", StringComparison.OrdinalIgnoreCase);
+    AgentTaskState BeginOrResumeAgentTask(string objective, bool continuation)
     {
-        var continuation = objective.Contains("continu", StringComparison.OrdinalIgnoreCase) || objective.Contains("retom", StringComparison.OrdinalIgnoreCase);
         if (continuation && saved.AgentTasks.TryGetValue(TaskKey, out var existing) && existing.Status is "running" or "paused") { existing.Status = "running"; existing.UpdatedAt = DateTime.Now.ToString("O"); SaveState(); return existing; }
         var task = new AgentTaskState { Objective = objective, Status = "running", StartedAt = DateTime.Now.ToString("O"), UpdatedAt = DateTime.Now.ToString("O"), LastStep = "Tarefa recebida", NextStep = "Mapear e analisar o projeto" };
         task.Timeline.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Tarefa iniciada"); saved.AgentTasks[TaskKey] = task; SaveState(); return task;
