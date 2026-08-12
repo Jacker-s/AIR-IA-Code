@@ -1,0 +1,11 @@
+bin/
+obj/
+installer/*.exe
+*.user
+*.suo
+*.log
+*.part
+ui-*.png
+captura-*.png
+referencia-*.png
+media-test-status.png

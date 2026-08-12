@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>AIRIACode</AssemblyName>
+    <RootNamespace>AirCodeNative</RootNamespace>
+    <ApplicationIcon>Assets\AIR-IACode.ico</ApplicationIcon>
+    <Product>AIR IA Code</Product>
+    <AssemblyTitle>AIR IA Code</AssemblyTitle>
+    <Company>Codename Jackers</Company>
+    <Authors>Codename Jackers</Authors>
+    <Copyright>Copyright © 2026 Codename Jackers</Copyright>
+    <Description>Assistente local de programação e criação multimídia com inteligência artificial.</Description>
+    <Version>0.10.0</Version>
+    <FileVersion>0.10.0.0</FileVersion>
+    <AssemblyVersion>0.10.0.0</AssemblyVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\AIR-IACode.png" />
+    <Resource Include="Assets\AIR-IACode.ico" />
+  </ItemGroup>
+</Project>
