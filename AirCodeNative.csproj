@@ -15,9 +15,9 @@
     <Authors>Codename Jackers</Authors>
     <Copyright>Copyright © 2026 Codename Jackers</Copyright>
     <Description>Assistente local de programação e criação multimídia com inteligência artificial.</Description>
-    <Version>0.14.1</Version>
-    <FileVersion>0.14.1.0</FileVersion>
-    <AssemblyVersion>0.14.1.0</AssemblyVersion>
+    <Version>0.14.2</Version>
+    <FileVersion>0.14.2.0</FileVersion>
+    <AssemblyVersion>0.14.2.0</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\AIR-IACode.png" />
