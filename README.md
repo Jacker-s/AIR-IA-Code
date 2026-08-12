@@ -9,6 +9,8 @@ Desenvolvido por **Codename Jackers**.
 - Chat local com modelos GGUF e respostas em streaming.
 - Catálogo de modelos com download retomável e modelo padrão.
 - Projetos com conversas individuais, acesso a arquivos, terminal, build e testes.
+- Agente autônomo persistente: até 8 horas e 200 ciclos, checkpoints, retomada e validação automática.
+- Mapeamento de projetos, leitura em lote e criação, edição, cópia, movimentação e exclusão controlada de arquivos.
 - Ferramentas de Git, ADB e Logcat exibidas em tempo real no chat.
 - Estúdio local de imagens e vídeos com configuração automática.
 - Suporte a AMD DirectML, NVIDIA CUDA, Intel XPU e CPU.
@@ -35,4 +37,3 @@ Modelos, conversas e configurações são mantidos fora do repositório, em `%LO
 ## Desenvolvedor
 
 Codename **Jackers**
-
