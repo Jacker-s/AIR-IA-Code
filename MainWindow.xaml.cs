@@ -73,6 +73,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        SidebarChats.PreviewMouseLeftButtonUp += SidebarChats_PreviewMouseLeftButtonUp;
         LoadState();
         SetupMediaButton.Content = "Configurar " + saved.MediaDevice.Split(' ')[0];
         if (!saved.FullAccessConfigured) { saved.FullAccessConfigured = true; saved.ConfirmCommands = false; ConfirmCommandsBox.IsChecked = false; }
@@ -1204,6 +1205,16 @@ Nunca invente uma execução: use a ferramenta e informe código de saída e res
     void SidebarChats_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (refreshingChatSidebar || DateTime.UtcNow < ignoreChatSelectionUntil || SidebarChats.SelectedItem is not ChatNavItem item || item.Id == activeChatId) return; var session = saved.ChatSessions.FirstOrDefault(chat => chat.Id == item.Id); if (session is not null) OpenChatSession(session);
+    }
+    void SidebarChats_PreviewMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        for (DependencyObject? current = e.OriginalSource as DependencyObject; current is not null;)
+        {
+            if (current is System.Windows.Controls.Button) return;
+            if (current is ListBoxItem item && item.DataContext is ChatNavItem chat) { var session = saved.ChatSessions.FirstOrDefault(candidate => candidate.Id == chat.Id); if (session is not null) OpenChatSession(session); return; }
+            try { current = Media.VisualTreeHelper.GetParent(current); }
+            catch { current = LogicalTreeHelper.GetParent(current); }
+        }
     }
     void DeleteChat_Click(object sender, RoutedEventArgs e)
     {
