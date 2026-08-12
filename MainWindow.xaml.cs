@@ -97,7 +97,12 @@ public partial class MainWindow : Window
     {
         for (var index = 0; index < Media.VisualTreeHelper.GetChildrenCount(parent); index++) { var child = Media.VisualTreeHelper.GetChild(parent, index); if (child is T match) yield return match; foreach (var descendant in FindVisualChildren<T>(child)) yield return descendant; }
     }
-    void ChatTab_Click(object sender, RoutedEventArgs e) { history.Clear(); saved.Chats[ChatKey] = new(); SaveState(); RenderChat(); SetTab(ChatPage, "Novo chat", activeProject is null ? "Conversa local" : Path.GetFileName(activeProject)); }
+    void ChatTab_Click(object sender, RoutedEventArgs e)
+    {
+        activeProject = null; saved.LastProject = ""; SidebarProjects.SelectedIndex = -1; history.Clear(); saved.Chats["__general"] = new();
+        ActiveProjectText.Text = "Chat independente"; ProjectAccessText.Text = "Sem projeto · conversa privada"; ProjectAccessText.Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#A8AFB3"));
+        SaveState(); RenderChat(); SetTab(ChatPage, "Novo chat", "Conversa local independente · nenhum projeto conectado"); PromptBox.Focus();
+    }
     void ModelsTab_Click(object sender, RoutedEventArgs e) => SetTab(ModelsPage, "Modelos locais", "Baixe, inicie e acompanhe seu modelo por aqui.");
     async void MediaTab_Click(object sender, RoutedEventArgs e) { SetTab(MediaPage, "Estúdio de mídia", "Crie imagens e vídeos localmente; o AirCode prepara tudo sozinho."); MediaSettingsScroll.ScrollToTop(); await CheckMediaEngine(false); }
     void ProjectsTab_Click(object sender, RoutedEventArgs e) { if (activeProject is null) { AddProject_Click(sender, e); return; } SetTab(ProjectsPage, Path.GetFileName(activeProject), "Arquivos e editor do projeto ativo."); }
@@ -367,6 +372,7 @@ public partial class MainWindow : Window
     {
         if (isSending) { generationCancellation?.Cancel(); return; }
         var prompt = PromptBox.Text.Trim(); if (string.IsNullOrEmpty(prompt)) return; PromptBox.Clear(); AddMessage("Você", prompt, true);
+        if (TryExtractImagePrompt(prompt, out var imagePrompt)) { await GenerateChatImageAsync(prompt, imagePrompt); return; }
         if (server is null || server.HasExited) { AddMessage(ProductName, "Inicie um modelo na seção Modelos antes de conversar.", false); return; }
         isSending = true; generationCancellation = new CancellationTokenSource(); SendButton.Content = "■"; SendButton.ToolTip = "Parar geração";
         var activity = BeginActivity("Executando solicitação");
@@ -519,6 +525,24 @@ public partial class MainWindow : Window
     }
     void PromptBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => ComposerBorder.BorderBrush = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#7567B7"));
     void PromptBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => ComposerBorder.BorderBrush = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#3B3F42"));
+    void ChatImageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (isSending) return;
+        var current = PromptBox.Text.Trim();
+        if (!TryExtractImagePrompt(current, out _)) PromptBox.Text = string.IsNullOrWhiteSpace(current) ? "/imagem " : "/imagem " + current;
+        PromptBox.Focus(); PromptBox.CaretIndex = PromptBox.Text.Length;
+    }
+    static bool TryExtractImagePrompt(string input, out string imagePrompt)
+    {
+        imagePrompt = ""; if (string.IsNullOrWhiteSpace(input)) return false;
+        string[] prefixes = ["/imagem", "/image", "gere uma imagem", "gerar uma imagem", "crie uma imagem", "criar uma imagem", "faça uma imagem", "faca uma imagem", "gere imagem", "crie imagem"];
+        var prefix = prefixes.FirstOrDefault(value => input.StartsWith(value, StringComparison.OrdinalIgnoreCase));
+        if (prefix is null) return false;
+        imagePrompt = input[prefix.Length..].TrimStart(' ', ':', '-', ',');
+        if (imagePrompt.StartsWith("de ", StringComparison.OrdinalIgnoreCase)) imagePrompt = imagePrompt[3..].TrimStart();
+        if (string.IsNullOrWhiteSpace(imagePrompt)) imagePrompt = "uma ilustração digital detalhada e bonita";
+        return true;
+    }
     void AddContext_Click(object sender, RoutedEventArgs e)
     {
         if (activeProject is null) { System.Windows.MessageBox.Show("Selecione um projeto antes de adicionar arquivos ao contexto.", "AirCode"); return; }
@@ -846,6 +870,41 @@ AÇÕES RECENTES
         var border = new Border { Background = user ? new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#292B2C")) : Media.Brushes.Transparent, BorderBrush = user ? new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#3A3D3F")) : Media.Brushes.Transparent, BorderThickness = user ? new Thickness(1) : new Thickness(0), CornerRadius = new CornerRadius(12), Padding = user ? new Thickness(15, 12, 15, 12) : new Thickness(0, 10, 0, 14), Margin = user ? new Thickness(120, 8, 0, 8) : new Thickness(0, 4, 70, 4), Child = content };
         Messages.Children.Add(border); ChatScroll.ScrollToEnd();
     }
+    void AddImageMessage(string path, string prompt)
+    {
+        if (!File.Exists(path)) { AddMessage(ProductName, "A imagem deste histórico não está mais disponível em: " + path, false); return; }
+        var bitmap = new System.Windows.Media.Imaging.BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad; bitmap.UriSource = new Uri(path); bitmap.EndInit(); bitmap.Freeze();
+        var preview = new System.Windows.Controls.Image { Source = bitmap, MaxWidth = 650, MaxHeight = 520, Stretch = Media.Stretch.Uniform, HorizontalAlignment = System.Windows.HorizontalAlignment.Left };
+        var imageBorder = new Border { Background = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#181B1D")), BorderBrush = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#343A3E")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(13), Padding = new Thickness(5), Child = preview };
+        var title = new TextBlock { Text = "Imagem criada localmente", Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#ECEEEF")), FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 9) };
+        var caption = new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap, Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#929A9E")), FontSize = 11, Margin = new Thickness(0, 9, 0, 8), MaxWidth = 650 };
+        var open = new System.Windows.Controls.Button { Content = "Abrir imagem", Padding = new Thickness(11, 6, 11, 6), Margin = new Thickness(0, 0, 8, 0), FontSize = 11 };
+        open.Click += (_, _) => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        var folder = new System.Windows.Controls.Button { Content = "Mostrar na pasta", Padding = new Thickness(11, 6, 11, 6), FontSize = 11, Background = Media.Brushes.Transparent };
+        folder.Click += (_, _) => Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+        var actions = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Children = { open, folder } };
+        var panel = new StackPanel { Children = { title, imageBorder, caption, actions } };
+        Messages.Children.Add(new Border { Background = Media.Brushes.Transparent, Padding = new Thickness(0, 10, 0, 16), Margin = new Thickness(0, 4, 70, 4), Child = panel }); ChatScroll.ScrollToEnd();
+    }
+    async Task GenerateChatImageAsync(string originalPrompt, string imagePrompt)
+    {
+        isSending = true; generationCancellation = new CancellationTokenSource(); SendButton.Content = "■"; SendButton.ToolTip = "Parar geração"; ChatImageButton.IsEnabled = false;
+        var activity = BeginActivity("Preparando geração de imagem local");
+        try
+        {
+            AddActivityStep(activity, "Verificando ComfyUI, DirectML e modelo de imagem");
+            if (!await EnsureMediaReady()) return;
+            generationCancellation.Token.ThrowIfCancellationRequested(); UpdateActivity(activity, "Gerando imagem com IA local…"); AddActivityStep(activity, "Processamento iniciado na GPU/CPU disponível");
+            var path = await GenerateLocalImageAsync(imagePrompt, generationCancellation.Token, status => UpdateActivity(activity, status));
+            mediaResultPath = path; AddImageMessage(path, imagePrompt); AddActivityStep(activity, "Imagem salva em " + path); FinishActivity(activity, "Concluído");
+            history.Add(new() { ["role"] = "user", ["content"] = originalPrompt });
+            history.Add(new() { ["role"] = "assistant", ["content"] = "Imagem criada localmente: " + Path.GetFileName(path), ["type"] = "image", ["path"] = path, ["prompt"] = imagePrompt });
+            saved.Chats[ChatKey] = history.Select(item => new Dictionary<string, string>(item)).ToList(); SaveState();
+        }
+        catch (OperationCanceledException) { FinishActivity(activity, "Interrompido", true); }
+        catch (Exception ex) { FinishActivity(activity, "Falha", true); AddMessage(ProductName, "Não consegui gerar a imagem: " + ex.Message, false); }
+        finally { generationCancellation?.Dispose(); generationCancellation = null; isSending = false; SendButton.Content = "↑"; SendButton.ToolTip = "Enviar"; ChatImageButton.IsEnabled = true; PromptBox.Focus(); }
+    }
     async void CheckMediaEngine_Click(object sender, RoutedEventArgs e) => await CheckMediaEngine(true);
     async Task<bool> CheckMediaEngine(bool showFailure)
     {
@@ -926,6 +985,16 @@ AÇÕES RECENTES
         catch (Exception ex) { MediaProgressText.Text = "Falha na geração"; MediaEmptyText.Visibility = Visibility.Visible; System.Windows.MessageBox.Show(ex.Message, "Erro ao gerar mídia"); }
         finally { GenerateMediaButton.IsEnabled = true; MediaProgressBar.Visibility = Visibility.Collapsed; }
     }
+    async Task<string> GenerateLocalImageAsync(string prompt, CancellationToken cancellationToken = default, Action<string>? progress = null)
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(30) }; var endpoint = MediaEndpointBox.Text.Trim().TrimEnd('/');
+        var workflow = await BuildDefaultImageWorkflow(client, endpoint, prompt, MediaNegativeBox.Text); EnsureLocalWorkflow(workflow);
+        var requestBody = JsonSerializer.Serialize(new { prompt = workflow, client_id = "air-ia-code-chat" });
+        using var response = await client.PostAsync(endpoint + "/prompt", new StringContent(requestBody, Encoding.UTF8, "application/json"), cancellationToken); var responseText = await response.Content.ReadAsStringAsync(cancellationToken); response.EnsureSuccessStatusCode();
+        using var submitted = JsonDocument.Parse(responseText); var promptId = submitted.RootElement.GetProperty("prompt_id").GetString() ?? throw new InvalidOperationException("ComfyUI não retornou o ID da tarefa.");
+        var output = await WaitForMediaOutput(client, endpoint, promptId, cancellationToken, progress); var query = $"filename={Uri.EscapeDataString(output.FileName)}&subfolder={Uri.EscapeDataString(output.Subfolder)}&type={Uri.EscapeDataString(output.Type)}"; var bytes = await client.GetByteArrayAsync(endpoint + "/view?" + query, cancellationToken);
+        var mediaFolder = Path.Combine(root, "geracoes"); Directory.CreateDirectory(mediaFolder); var resultPath = Path.Combine(mediaFolder, $"air-ia-code-{DateTime.Now:yyyyMMdd-HHmmss}.png"); await File.WriteAllBytesAsync(resultPath, bytes, cancellationToken); return resultPath;
+    }
     async Task<JsonElement> BuildDefaultImageWorkflow(HttpClient client, string endpoint, string prompt, string negative, long? seedOverride = null)
     {
         var infoText = await client.GetStringAsync(endpoint + "/object_info/CheckpointLoaderSimple"); using var info = JsonDocument.Parse(infoText); var names = new List<string>(); CollectStringsUnderProperty(info.RootElement, "ckpt_name", names); var checkpoint = names.FirstOrDefault(name => name.EndsWith(".safetensors", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".ckpt", StringComparison.OrdinalIgnoreCase)); if (checkpoint is null) throw new InvalidOperationException("Nenhum checkpoint de imagem foi encontrado no ComfyUI. Instale um modelo SD 1.5/SDXL ou selecione um workflow que faça o download do modelo.");
@@ -955,9 +1024,9 @@ AÇÕES RECENTES
         if (element.ValueKind == JsonValueKind.Object) { foreach (var property in element.EnumerateObject()) { if (property.NameEquals("class_type") && property.Value.ValueKind == JsonValueKind.String) { var node = property.Value.GetString() ?? ""; string[] remoteMarkers = ["api", "luma", "runway", "kling", "openai", "gemini", "ideogram", "recraft", "stabilityai", "bfl"]; if (remoteMarkers.Any(marker => node.Contains(marker, StringComparison.OrdinalIgnoreCase))) throw new InvalidOperationException($"O node '{node}' parece usar um serviço externo. O AirCode permite apenas geração local."); } EnsureLocalWorkflow(property.Value); } } else if (element.ValueKind == JsonValueKind.Array) foreach (var child in element.EnumerateArray()) EnsureLocalWorkflow(child);
     }
     sealed record MediaOutput(string FileName, string Subfolder, string Type);
-    async Task<MediaOutput> WaitForMediaOutput(HttpClient client, string endpoint, string promptId)
+    async Task<MediaOutput> WaitForMediaOutput(HttpClient client, string endpoint, string promptId, CancellationToken cancellationToken = default, Action<string>? progress = null)
     {
-        for (var attempt = 0; attempt < 1800; attempt++) { await Task.Delay(1000); var text = await client.GetStringAsync(endpoint + "/history/" + promptId); using var historyDoc = JsonDocument.Parse(text); if (TryFindMediaOutput(historyDoc.RootElement, out var output)) return output; if (attempt % 5 == 0) MediaProgressText.Text = $"Processando no ComfyUI · {attempt + 1}s…"; } throw new TimeoutException("O ComfyUI não concluiu a geração dentro do limite.");
+        for (var attempt = 0; attempt < 1800; attempt++) { await Task.Delay(1000, cancellationToken); var text = await client.GetStringAsync(endpoint + "/history/" + promptId, cancellationToken); using var historyDoc = JsonDocument.Parse(text); if (TryFindMediaOutput(historyDoc.RootElement, out var output)) return output; if (attempt % 5 == 0) { var status = $"Processando imagem local · {attempt + 1}s…"; MediaProgressText.Text = status; progress?.Invoke(status); } } throw new TimeoutException("O ComfyUI não concluiu a geração dentro do limite.");
     }
     static bool TryFindMediaOutput(JsonElement element, out MediaOutput output)
     {
@@ -986,7 +1055,7 @@ AÇÕES RECENTES
     void SidebarProjects_SelectionChanged(object sender, SelectionChangedEventArgs e) { if (SidebarProjects.SelectedIndex >= 0 && SidebarProjects.SelectedIndex < projects.Count) { var path = projects[SidebarProjects.SelectedIndex]; if (!SamePath(path, activeProject)) OpenProject(path); } }
     string ChatKey => activeProject ?? "__general";
     void OpenProject(string path) { activeProject = path; saved.LastProject = path; ActiveProjectText.Text = Path.GetFileName(path); ProjectAccessText.Text = saved.ConfirmCommands ? "Acesso ao projeto · confirmar comandos" : "Acesso total · comandos automáticos"; ProjectAccessText.Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#79D7AC")); var projectIndex = projects.IndexOf(path); if (projectIndex >= 0 && SidebarProjects.SelectedIndex != projectIndex) SidebarProjects.SelectedIndex = projectIndex; BuildTree(path); history.Clear(); if (saved.Chats.TryGetValue(ChatKey, out var chat)) history.AddRange(chat.Select(x => new Dictionary<string, string>(x))); RenderChat(); SetTab(ChatPage, Path.GetFileName(path), "Chat individual · ações e saídas exibidas em tempo real"); SaveState(); PromptBox.Focus(); }
-    void RenderChat() { Messages.Children.Clear(); if (history.Count == 0) { Messages.Children.Add(new TextBlock { Text = "O que vamos construir?", FontSize = 24, FontWeight = FontWeights.SemiBold, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, Margin = new Thickness(0, 70, 0, 8) }); Messages.Children.Add(new TextBlock { Text = activeProject is null ? "Escolha um projeto e um modelo local para começar." : $"Contexto ativo: {Path.GetFileName(activeProject)}", Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#858B8E")), HorizontalAlignment = System.Windows.HorizontalAlignment.Center }); return; } foreach (var message in history) AddMessage(message["role"] == "user" ? "Você" : "AirCode", message["content"], message["role"] == "user"); }
+    void RenderChat() { Messages.Children.Clear(); if (history.Count == 0) { Messages.Children.Add(new TextBlock { Text = "O que vamos construir?", FontSize = 24, FontWeight = FontWeights.SemiBold, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, Margin = new Thickness(0, 70, 0, 8) }); Messages.Children.Add(new TextBlock { Text = activeProject is null ? "Escolha um projeto e um modelo local para começar." : $"Contexto ativo: {Path.GetFileName(activeProject)}", Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#858B8E")), HorizontalAlignment = System.Windows.HorizontalAlignment.Center }); return; } foreach (var message in history) { var user = message.GetValueOrDefault("role") == "user"; if (!user && message.GetValueOrDefault("type") == "image" && message.TryGetValue("path", out var path)) AddImageMessage(path, message.GetValueOrDefault("prompt", "Imagem gerada")); else AddMessage(user ? "Você" : ProductName, message.GetValueOrDefault("content", ""), user); } }
     void BuildTree(string path) { ProjectTree.Items.Clear(); var rootNode = CreateNode(path, 0); ProjectTree.Items.Add(rootNode); rootNode.IsExpanded = true; }
     TreeViewItem CreateNode(string path, int depth) { var node = new TreeViewItem { Header = Path.GetFileName(path), Tag = path }; if (Directory.Exists(path) && depth < 5) { try { var ignored = new[] { ".git", ".gradle", ".kotlin", ".idea", "bin", "obj", "node_modules", "build", "dist", "out", "release", ".cache" }; foreach (var dir in Directory.EnumerateDirectories(path).Where(x => !ignored.Contains(Path.GetFileName(x), StringComparer.OrdinalIgnoreCase)).Take(80)) node.Items.Add(CreateNode(dir, depth + 1)); foreach (var file in Directory.EnumerateFiles(path).Take(200)) node.Items.Add(new TreeViewItem { Header = Path.GetFileName(file), Tag = file }); } catch { } } return node; }
     void ProjectTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e) { if (e.NewValue is TreeViewItem item && item.Tag is string path && File.Exists(path)) { try { var info = new FileInfo(path); if (info.Length > 2_000_000) { EditorBox.Text = "Arquivo grande demais para o editor interno."; return; } currentFile = path; CurrentFileText.Text = Path.GetFileName(path); EditorBox.Text = File.ReadAllText(path); } catch (Exception ex) { EditorBox.Text = ex.Message; } } }
