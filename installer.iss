@@ -1,5 +1,5 @@
 #define AppName "AIR IA Code"
-#define AppVersion "0.12.0"
+#define AppVersion "0.14.0"
 #define AppPublisher "Codename Jackers"
 #define AppExeName "AIRIACode.exe"
 

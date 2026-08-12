@@ -7,7 +7,11 @@ Desenvolvido por **Codename Jackers**.
 ## Recursos
 
 - Chat local com modelos GGUF e respostas em streaming.
+- Histórico em sessões: cada novo chat é preservado e pode ser reaberto pela barra lateral.
+- Resultados reais de comandos, builds, testes, arquivos e ferramentas apresentados no chat.
+- Blocos de código com rolagem, seleção e cópia em um clique.
 - Catálogo de modelos com download retomável e modelo padrão.
+- Modelos especializados em agentes/ferramentas e desinstalação com liberação do armazenamento.
 - Projetos com conversas individuais, acesso a arquivos, terminal, build e testes.
 - Agente autônomo persistente: até 8 horas e 200 ciclos, checkpoints, retomada e validação automática.
 - Mapeamento de projetos, leitura em lote e criação, edição, cópia, movimentação e exclusão controlada de arquivos.

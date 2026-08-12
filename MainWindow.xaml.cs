@@ -31,6 +31,8 @@ public partial class MainWindow : Window
         new("Gemma 3 4B", "Modelo geral moderno para conversa, análise e produção de conteúdo.", "gemma-3-4b-it-Q4_K_M.gguf", "https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf?download=true", "all", "2,5 GB", "22–40 tok/s", "GERAL", "Excelente"),
         new("Qwen Coder 7B oficial", "Recomendado para programação diária, refatoração e criação de aplicativos.", "qwen2.5-coder-7b-instruct-q4_k_m.gguf", "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf?download=true", "all", "4,7 GB", "18–35 tok/s", "RECOMENDADO", "Excelente"),
         new("Qwen Coder 7B Uncensored", "Variante com menos recusas, focada em código e automação local.", "qwen2.5-coder-7b-instruct-uncensored-q4_k_m.gguf", "https://huggingface.co/BlossomsAI/Qwen2.5-Coder-7B-Instruct-Uncensored-GGUF/resolve/main/q4_k_m.gguf?download=true", "all", "4,7 GB", "18–35 tok/s", "SEM FILTROS", "Excelente"),
+        new("Qwen3 8B Agent", "Recomendado para agentes: raciocínio, programação e uso preciso de ferramentas em várias etapas.", "Qwen3-8B-Q4_K_M.gguf", "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf?download=true", "all", "5,03 GB", "13–26 tok/s", "AGENTE", "Excelente"),
+        new("xLAM 7B Function Calling", "Especialista em function calling e controle de ferramentas; ideal para terminal e automações.", "xLAM-7b-fc-r-Q4_K_M.gguf", "https://huggingface.co/bartowski/xLAM-7b-fc-r-GGUF/resolve/main/xLAM-7b-fc-r-Q4_K_M.gguf?download=true", "all", "4,22 GB", "16–30 tok/s", "FERRAMENTAS", "Excelente"),
         new("Llama 3.1 8B Uncensored", "Chat geral, planejamento e código com poucas recusas.", "Llama-3.1-8B-Uncensored.Q4_K_M.gguf", "https://huggingface.co/mradermacher/Llama-3.1-8B-Uncensored-GGUF/resolve/main/Llama-3.1-8B-Uncensored.Q4_K_M.gguf?download=true", "all", "5,0 GB", "14–28 tok/s", "SEM FILTROS", "Muito bom"),
         new("Mistral 7B Instruct", "Assistente geral equilibrado para conversa, escrita e raciocínio.", "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf", "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf?download=true", "all", "4,4 GB", "17–32 tok/s", "GERAL", "Excelente"),
         new("Hermes 3 Llama 8B", "Chat geral versátil, instruções complexas e uso de ferramentas.", "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", "https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-8B-GGUF/resolve/main/Hermes-3-Llama-3.1-8B.Q4_K_M.gguf?download=true", "all", "4,9 GB", "14–27 tok/s", "GERAL", "Muito bom"),
@@ -55,9 +57,14 @@ public partial class MainWindow : Window
     string? currentFile;
     bool loadingSettings = true;
     bool refreshingModelSelectors;
+    bool refreshingChatSidebar;
+    DateTime ignoreChatSelectionUntil;
+    string activeChatId = "";
     string currentModelFilter = "all";
+    sealed record ChatNavItem(string Id, string Title, string Subtitle);
+    sealed class ChatSession { public string Id { get; set; } = Guid.NewGuid().ToString("N"); public string Title { get; set; } = "Novo chat"; public string ProjectPath { get; set; } = ""; public string CreatedAt { get; set; } = DateTime.Now.ToString("O"); public string UpdatedAt { get; set; } = DateTime.Now.ToString("O"); public List<Dictionary<string, string>> Messages { get; set; } = new(); }
     sealed class AgentTaskState { public string Objective { get; set; } = ""; public string Status { get; set; } = "running"; public string StartedAt { get; set; } = ""; public string UpdatedAt { get; set; } = ""; public string LastStep { get; set; } = ""; public string NextStep { get; set; } = ""; public int ToolCalls { get; set; } public List<string> Timeline { get; set; } = new(); }
-    sealed class SavedState { public List<string> Projects { get; set; } = new(); public Dictionary<string, List<Dictionary<string, string>>> Chats { get; set; } = new(); public Dictionary<string, string> ProjectMemories { get; set; } = new(); public Dictionary<string, List<string>> ProjectActions { get; set; } = new(); public Dictionary<string, AgentTaskState> AgentTasks { get; set; } = new(); public string LastProject { get; set; } = ""; public string Context { get; set; } = "8192"; public string GpuLayers { get; set; } = "auto"; public string Temperature { get; set; } = "0.30"; public int MaxTokens { get; set; } = 1800; public string PerformanceMode { get; set; } = "Automático (recomendado)"; public bool ConfirmCommands { get; set; } = false; public bool FullAccessConfigured { get; set; } public bool AutoStart { get; set; } public string DefaultModelPath { get; set; } = ""; public string MediaEndpoint { get; set; } = "http://127.0.0.1:8188"; public string MediaDevice { get; set; } = "AMD DirectML"; public string ComfyPath { get; set; } = ""; public string ImageWorkflow { get; set; } = ""; public string VideoWorkflow { get; set; } = ""; }
+    sealed class SavedState { public List<string> Projects { get; set; } = new(); public Dictionary<string, List<Dictionary<string, string>>> Chats { get; set; } = new(); public List<ChatSession> ChatSessions { get; set; } = new(); public string ActiveChatId { get; set; } = ""; public Dictionary<string, string> ProjectMemories { get; set; } = new(); public Dictionary<string, List<string>> ProjectActions { get; set; } = new(); public Dictionary<string, AgentTaskState> AgentTasks { get; set; } = new(); public string LastProject { get; set; } = ""; public string Context { get; set; } = "8192"; public string GpuLayers { get; set; } = "auto"; public string Temperature { get; set; } = "0.30"; public int MaxTokens { get; set; } = 1800; public string PerformanceMode { get; set; } = "Automático (recomendado)"; public bool ConfirmCommands { get; set; } = false; public bool FullAccessConfigured { get; set; } public bool AutoStart { get; set; } public string DefaultModelPath { get; set; } = ""; public string MediaEndpoint { get; set; } = "http://127.0.0.1:8188"; public string MediaDevice { get; set; } = "AMD DirectML"; public string ComfyPath { get; set; } = ""; public string ImageWorkflow { get; set; } = ""; public string VideoWorkflow { get; set; } = ""; }
     SavedState saved = new();
     string StateFile => Path.Combine(root, "settings.json");
     string ServerPidFile => Path.Combine(root, "llama-server.pid");
@@ -74,8 +81,9 @@ public partial class MainWindow : Window
         ModelsBox.SelectedItem = models[0];
         loadingSettings = false;
         RefreshProjectsSidebar();
-        if (!Directory.Exists(saved.LastProject)) saved.LastProject = projects.LastOrDefault(Directory.Exists) ?? "";
-        if (Directory.Exists(saved.LastProject)) OpenProject(saved.LastProject);
+        RefreshChatsSidebar();
+        var session = saved.ChatSessions.FirstOrDefault(chat => chat.Id == saved.ActiveChatId) ?? saved.ChatSessions.OrderByDescending(chat => ParseDate(chat.UpdatedAt)).FirstOrDefault();
+        if (session is not null) OpenChatSession(session, false); else CreateChatSession("", true);
         SaveState();
         Loaded += async (_, _) => await InitializeModelsAsync();
     }
@@ -87,8 +95,8 @@ public partial class MainWindow : Window
     void SetTab(UIElement page, string title, string subtitle) { ChatPage.Visibility = ModelsPage.Visibility = MediaPage.Visibility = ProjectsPage.Visibility = TerminalPage.Visibility = SettingsPage.Visibility = Visibility.Collapsed; page.Visibility = Visibility.Visible; PageTitle.Text = title; PageSubtitle.Text = subtitle; UpdateNavigation(page); }
     void UpdateNavigation(UIElement activePage)
     {
-        var activeLabel = activePage == ModelsPage ? "◇  Modelos" : activePage == MediaPage ? "✦  Mídia IA" : activePage == ProjectsPage ? "▣  Workspace" : activePage == TerminalPage ? "›_  Terminal" : activePage == SettingsPage ? "⚙  Configurações" : "＋  Novo chat";
-        string[] navigationLabels = ["＋  Novo chat", "◇  Modelos", "✦  Mídia IA", "▣  Workspace", "›_  Terminal", "⚙  Configurações"];
+        var activeLabel = activePage == ModelsPage ? "◇  Modelos" : activePage == MediaPage ? "✦  Mídia" : activePage == ProjectsPage ? "▣  Projeto" : activePage == TerminalPage ? "›_  Terminal" : activePage == SettingsPage ? "⚙  Configurações" : "＋  Novo chat";
+        string[] navigationLabels = ["＋  Novo chat", "◇  Modelos", "✦  Mídia", "▣  Projeto", "›_  Terminal", "⚙  Configurações"];
         foreach (var button in FindVisualChildren<System.Windows.Controls.Button>(this).Where(button => button.Content is string text && navigationLabels.Contains(text)))
         {
             var selected = Equals(button.Content, activeLabel); button.Background = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString(selected ? "#293632" : "Transparent")); button.Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString(selected ? "#F3F6F5" : "#D1D7D5"));
@@ -100,14 +108,12 @@ public partial class MainWindow : Window
     }
     void ChatTab_Click(object sender, RoutedEventArgs e)
     {
-        activeProject = null; saved.LastProject = ""; SidebarProjects.SelectedIndex = -1; history.Clear(); saved.Chats["__general"] = new();
-        ActiveProjectText.Text = "Chat independente"; ProjectAccessText.Text = "Sem projeto · conversa privada"; ProjectAccessText.Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#A8AFB3"));
-        SaveState(); RenderChat(); SetTab(ChatPage, "Novo chat", "Conversa local independente · nenhum projeto conectado"); PromptBox.Focus();
+        CreateChatSession("", true);
     }
     void ModelsTab_Click(object sender, RoutedEventArgs e) => SetTab(ModelsPage, "Modelos locais", "Baixe, inicie e acompanhe seu modelo por aqui.");
     async void MediaTab_Click(object sender, RoutedEventArgs e) { SetTab(MediaPage, "Estúdio de mídia", "Crie imagens e vídeos localmente; o AirCode prepara tudo sozinho."); MediaSettingsScroll.ScrollToTop(); await CheckMediaEngine(false); }
     void ProjectsTab_Click(object sender, RoutedEventArgs e) { if (activeProject is null) { AddProject_Click(sender, e); return; } SetTab(ProjectsPage, Path.GetFileName(activeProject), "Arquivos e editor do projeto ativo."); }
-    void TerminalTab_Click(object sender, RoutedEventArgs e) => SetTab(TerminalPage, "Terminal", activeProject is null ? "Selecione um projeto antes de executar comandos." : activeProject);
+    void TerminalTab_Click(object sender, RoutedEventArgs e) => SetTab(TerminalPage, "Terminal do Windows", activeProject is null ? "Executando na pasta do usuário · saída em tempo real" : activeProject);
     void SettingsTab_Click(object sender, RoutedEventArgs e) => SetTab(SettingsPage, "Configurações", "Controle de desempenho, contexto e segurança.");
     void TitleBar_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e) { if (e.ClickCount == 2) ToggleMaximize(); else if (e.LeftButton == MouseButtonState.Pressed) DragMove(); }
     void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -180,6 +186,7 @@ public partial class MainWindow : Window
             "fast" => filtered.Where(m => m.Category is "ULTRARRÁPIDO" or "RÁPIDO" or "CHAT RÁPIDO" or "RECOMENDADO"),
             "general" => filtered.Where(m => m.Category is "GERAL" or "CHAT RÁPIDO"),
             "installed" => filtered.Where(IsInstalled),
+            "agent" => filtered.Where(m => m.Category is "AGENTE" or "FERRAMENTAS" or "RECOMENDADO"),
             "advanced" => filtered.Where(m => m.Category is "AVANÇADO" or "GRANDE"),
             _ => filtered
         };
@@ -210,7 +217,7 @@ public partial class MainWindow : Window
         StartButton.IsEnabled = installed;
         DefaultButton.IsEnabled = installed;
         RemoveModelButton.IsEnabled = installed || partialExists;
-        RemoveModelButton.Content = installed ? "Remover arquivo" : partialExists ? "Descartar parcial" : "Nada para remover";
+        RemoveModelButton.Content = installed ? "Desinstalar IA" : partialExists ? "Apagar download parcial" : "Não instalada";
         var isDefault = SamePath(path, saved.DefaultModelPath);
         DefaultButton.Content = isDefault ? "✓ Modelo padrão" : "Definir como padrão";
     }
@@ -326,10 +333,10 @@ public partial class MainWindow : Window
     }
     void RemoveModel_Click(object sender, RoutedEventArgs e)
     {
-        if (ModelsBox.SelectedItem is not Model model) return; var path = ResolvedPath(model); var target = File.Exists(path) ? path : path + ".part"; if (!File.Exists(target)) return;
-        if (System.Windows.MessageBox.Show($"Remover este arquivo do computador?\n\n{target}", "Remover modelo", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        try { if (server is { HasExited: false } && SamePath(path, runningModelPath)) StopOwnedServer(); File.Delete(target); if (SamePath(path, saved.DefaultModelPath)) saved.DefaultModelPath = ""; Log("Arquivo removido: " + target); RefreshModelLists(); SaveState(); ModelsBox_SelectionChanged(this, null!); }
-        catch (Exception ex) { System.Windows.MessageBox.Show("Não foi possível remover o modelo: " + ex.Message, "AirCode"); }
+        if (ModelsBox.SelectedItem is not Model model) return; var path = ResolvedPath(model); var targets = new[] { path, path + ".part" }.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList(); if (targets.Count == 0) return; var bytes = targets.Sum(target => new FileInfo(target).Length);
+        if (System.Windows.MessageBox.Show($"Desinstalar {model.Name}?\n\nO modelo será encerrado e {FormatBytes(bytes)} serão apagados permanentemente do armazenamento.\n\n{string.Join("\n", targets)}", "Desinstalar IA", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        try { if (server is { HasExited: false } && SamePath(path, runningModelPath)) StopOwnedServer(); foreach (var target in targets) File.Delete(target); if (SamePath(path, saved.DefaultModelPath)) saved.DefaultModelPath = ""; Log($"IA desinstalada: {model.Name} · {FormatBytes(bytes)} liberados"); RefreshModelLists(); SaveState(); ModelsBox_SelectionChanged(this, null!); System.Windows.MessageBox.Show($"{model.Name} foi desinstalada.\n\nEspaço liberado: {FormatBytes(bytes)}", "IA removida"); }
+        catch (Exception ex) { System.Windows.MessageBox.Show("Não foi possível desinstalar a IA: " + ex.Message, "AIR IA Code"); }
     }
     void DefaultModelBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -374,23 +381,24 @@ public partial class MainWindow : Window
         if (isSending) { generationCancellation?.Cancel(); return; }
         var prompt = PromptBox.Text.Trim(); if (string.IsNullOrEmpty(prompt)) return; PromptBox.Clear(); AddMessage("Você", prompt, true);
         if (TryExtractImagePrompt(prompt, out var imagePrompt)) { await GenerateChatImageAsync(prompt, imagePrompt); return; }
-        if (server is null || server.HasExited) { AddMessage(ProductName, "Inicie um modelo na seção Modelos antes de conversar.", false); return; }
+        if (server is null || server.HasExited) { const string notice = "Inicie um modelo na seção Modelos antes de conversar."; AddMessage(ProductName, notice, false); history.Add(new() { ["role"] = "user", ["content"] = prompt }); history.Add(new() { ["role"] = "assistant", ["content"] = notice }); PersistCurrentChat(); SaveState(); return; }
         isSending = true; generationCancellation = new CancellationTokenSource(); SendButton.Content = "■"; SendButton.ToolTip = "Parar geração";
         var activity = BeginActivity("Executando solicitação");
         AgentTaskState? autonomousTask = null;
         try
         {
             AddActivityStep(activity, activeProject is null ? "Preparando conversa local" : $"Carregando contexto de {Path.GetFileName(activeProject)}");
-            var useProjectTools = activeProject is not null;
-            if (useProjectTools) { autonomousTask = BeginOrResumeAgentTask(prompt); AddActivityStep(activity, "Modo autônomo persistente · até 8 horas"); }
+            var useProjectTools = true;
+            autonomousTask = BeginOrResumeAgentTask(prompt); AddActivityStep(activity, "Modo autônomo persistente · ferramentas reais habilitadas");
             var requestMessages = BuildRecentHistory(useProjectTools);
             requestMessages.Add(new Dictionary<string, string> { ["role"] = "user", ["content"] = prompt });
-            if (activeProject is not null) requestMessages.Insert(0, new Dictionary<string, string> { ["role"] = "system", ["content"] = useProjectTools ? BuildAgentContext() : $"Você é o AIR IA Code, assistente local criado por Codename Jackers para o projeto {Path.GetFileName(activeProject)}. Responda de forma curta e natural." });
+            requestMessages.Insert(0, new Dictionary<string, string> { ["role"] = "system", ["content"] = activeProject is null ? BuildGeneralAgentContext() : BuildAgentContext() });
             string? bootstrapName = null; string? bootstrapOutput = null;
             if (useProjectTools && GetBootstrapTool(prompt) is { } bootstrap)
             {
                 UpdateActivity(activity, "Executando " + ToolDisplayName(bootstrap.Name) + "…");
                 bootstrapName = bootstrap.Name; bootstrapOutput = await ExecuteProjectTool(bootstrap.Name, bootstrap.Arguments, activity);
+                RecordToolResult(bootstrap.Name, bootstrap.Arguments, bootstrapOutput);
                 requestMessages.Add(new Dictionary<string, string> { ["role"] = "user", ["content"] = $"DADOS REAIS COLETADOS POR {bootstrap.Name}:\n{bootstrapOutput}\nResponda à solicitação original com conclusões concretas baseadas nesses dados." });
             }
             var temperature = double.TryParse(saved.Temperature, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsedTemperature) ? parsedTemperature : 0.35;
@@ -415,6 +423,7 @@ public partial class MainWindow : Window
                         if (repeatedCalls[signature] > 3) toolResult = "Esta mesma ação já foi repetida três vezes. Analise o erro, escolha outra abordagem ou use outra ferramenta.";
                         else toolResult = await ExecuteProjectTool(call.Name, call.Arguments, activity);
                         toolCallsExecuted++; mutationPerformed |= call.Name is "write_file" or "edit_file" or "create_directory" or "move_path" or "copy_file" or "delete_path" or "install_dependency"; validationPerformed |= call.Name is "build_project" or "test_project" || (call.Name == "run_command" && (call.Arguments.Contains("build", StringComparison.OrdinalIgnoreCase) || call.Arguments.Contains("test", StringComparison.OrdinalIgnoreCase)));
+                        RecordToolResult(call.Name, call.Arguments, toolResult);
                         CheckpointAgentTask($"{ToolDisplayName(call.Name)}: {TrimText(toolResult, 600)}", "Analisar o retorno e continuar a execução");
                         requestMessages.Add(new Dictionary<string, object> { ["role"] = "tool", ["tool_call_id"] = call.Id, ["content"] = toolResult });
                     }
@@ -427,7 +436,7 @@ public partial class MainWindow : Window
                     requestMessages.Add(new Dictionary<string, string> { ["role"] = "assistant", ["content"] = responseContent });
                     UpdateActivity(activity, "Executando " + ToolDisplayName(textToolName) + "…");
                     var toolResult = await ExecuteProjectTool(textToolName, textToolArguments, activity);
-                    toolCallsExecuted++; mutationPerformed |= textToolName is "write_file" or "edit_file" or "create_directory" or "move_path" or "copy_file" or "delete_path" or "install_dependency"; validationPerformed |= textToolName is "build_project" or "test_project" || (textToolName == "run_command" && (textToolArguments.Contains("build", StringComparison.OrdinalIgnoreCase) || textToolArguments.Contains("test", StringComparison.OrdinalIgnoreCase))); CheckpointAgentTask($"{ToolDisplayName(textToolName)}: {TrimText(toolResult, 600)}", "Analisar o retorno e continuar a execução");
+                    toolCallsExecuted++; mutationPerformed |= textToolName is "write_file" or "edit_file" or "create_directory" or "move_path" or "copy_file" or "delete_path" or "install_dependency"; validationPerformed |= textToolName is "build_project" or "test_project" || (textToolName == "run_command" && (textToolArguments.Contains("build", StringComparison.OrdinalIgnoreCase) || textToolArguments.Contains("test", StringComparison.OrdinalIgnoreCase))); RecordToolResult(textToolName, textToolArguments, toolResult); CheckpointAgentTask($"{ToolDisplayName(textToolName)}: {TrimText(toolResult, 600)}", "Analisar o retorno e continuar a execução");
                     requestMessages.Add(new Dictionary<string, string> { ["role"] = "user", ["content"] = $"Resultado da ferramenta {textToolName}:\n{toolResult}\nContinue a tarefa. Se terminou, responda normalmente sem outro JSON." });
                     UpdateActivity(activity, "Analisando resultado da ação…"); continue;
                 }
@@ -462,7 +471,7 @@ public partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(answer)) { answer = "A tarefa atingiu o limite seguro desta sessão e ficou salva. Use Continuar tarefa para retomar exatamente do último checkpoint."; AddMessage(ProductName, answer, false); SetAgentTaskStatus("paused", "Limite da sessão atingido", "Retomar do último checkpoint"); }
             var codeBlocks = Math.Max(0, answer.Split("```", StringSplitOptions.None).Length / 2);
             AddActivityStep(activity, codeBlocks > 0 ? $"Resposta preparada com {codeBlocks} bloco(s) de código" : "Resposta preparada");
-            history.Add(new() { ["role"] = "user", ["content"] = prompt }); history.Add(new() { ["role"] = "assistant", ["content"] = answer }); saved.Chats[ChatKey] = history.Select(x => new Dictionary<string, string>(x)).ToList();
+            history.Add(new() { ["role"] = "user", ["content"] = prompt }); history.Add(new() { ["role"] = "assistant", ["content"] = answer }); PersistCurrentChat();
             if (activeProject is not null) saved.ProjectMemories[ChatKey] = TrimText($"Última solicitação: {prompt}\nÚltima resposta: {answer}", 6000); SaveState();
             if (useProjectTools && !string.IsNullOrWhiteSpace(answer) && autonomousTask?.Status != "paused") SetAgentTaskStatus("completed", answer, "");
             FinishActivity(activity, "Concluído");
@@ -483,7 +492,7 @@ public partial class MainWindow : Window
         var buffer = new StringBuilder(); var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(32) }; timer.Tick += (_, _) => { var value = buffer.ToString(); if (text.Text != value) { text.Text = value; ChatScroll.ScrollToEnd(); } }; timer.Start();
         Messages.Children.Add(border); ChatScroll.ScrollToEnd(); return new StreamingMessage(border, text, buffer, timer);
     }
-    void FinishStreamingMessage(StreamingMessage message) { message.Timer.Stop(); message.Text.Text = message.Buffer.ToString(); ChatScroll.ScrollToEnd(); }
+    void FinishStreamingMessage(StreamingMessage message) { message.Timer.Stop(); message.Text.Text = message.Buffer.ToString(); message.Container.Child = BuildMessageContent(message.Buffer.ToString(), false); ChatScroll.ScrollToEnd(); }
     async Task<StreamedResponse> StreamCompletion(HttpClient client, string body, Action<string> onToken, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "http://127.0.0.1:8080/v1/chat/completions") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
@@ -652,7 +661,7 @@ public partial class MainWindow : Window
         }
         if (start <= 1) return; messages.RemoveRange(1, start - 1);
         var actions = saved.ProjectActions.TryGetValue(ChatKey, out var log) ? string.Join("\n", log.TakeLast(15)) : "Sem ações registradas.";
-        var task = saved.AgentTasks.TryGetValue(ChatKey, out var state) ? $"Objetivo: {state.Objective}\nÚltima etapa: {state.LastStep}\nPróxima: {state.NextStep}" : "";
+        var task = saved.AgentTasks.TryGetValue(TaskKey, out var state) ? $"Objetivo: {state.Objective}\nÚltima etapa: {state.LastStep}\nPróxima: {state.NextStep}" : "";
         messages.Insert(1, new Dictionary<string, string> { ["role"] = "user", ["content"] = $"CHECKPOINT DE CONTEXTO COMPACTADO\n{task}\nAções recentes:\n{actions}\nContinue usando os retornos mais recentes abaixo." });
     }
     static bool NeedsProjectTools(string prompt)
@@ -665,6 +674,7 @@ public partial class MainWindow : Window
     static BootstrapTool? GetBootstrapTool(string prompt)
     {
         var value = prompt.ToLowerInvariant();
+        if (TryExtractExplicitWindowsCommand(prompt, out var explicitCommand)) return new("run_command", JsonSerializer.Serialize(new { command = explicitCommand, timeout_seconds = 300 }));
         if (value.Contains("logcat")) return new("android_logcat", JsonSerializer.Serialize(new { lines = 1200, filter = "", follow = false }));
         if (value.Contains("adb") || value.Contains("aparelho") || value.Contains("dispositivo")) return new("android_devices", "{}");
         if (value.Contains("compile") || value.Contains("build")) return new("build_project", "{}");
@@ -674,6 +684,14 @@ public partial class MainWindow : Window
         if (value.Contains("ambiente") || value.Contains("sdk") || value.Contains("dependência") || value.Contains("dependencia")) return new("inspect_environment", "{}");
         return null;
     }
+    static bool TryExtractExplicitWindowsCommand(string prompt, out string command)
+    {
+        command = ""; if (!System.Text.RegularExpressions.Regex.IsMatch(prompt, "\\b(execute|executa|rode|rodar|terminal|powershell|cmd)\\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) return false;
+        var fenced = System.Text.RegularExpressions.Regex.Match(prompt, "`(?<command>[^`\\r\\n]{1,4000})`"); if (fenced.Success) command = fenced.Groups["command"].Value.Trim();
+        if (string.IsNullOrWhiteSpace(command)) { var colon = prompt.IndexOf(':'); if (colon >= 0 && colon < prompt.Length - 1) command = prompt[(colon + 1)..].Trim(); }
+        if (string.IsNullOrWhiteSpace(command)) { var known = System.Text.RegularExpressions.Regex.Match(prompt, "(?im)^(?<command>(?:write-output|echo|dir|cd|get-childitem|get-process|start-process|dotnet|npm|python|git)\\b.+)$"); if (known.Success) command = known.Groups["command"].Value.Trim(); }
+        command = command.Trim(' ', '`', '"'); return command.Length is > 0 and <= 4000;
+    }
     static bool LooksLikeUnreliableActionAnswer(string answer)
     {
         if (string.IsNullOrWhiteSpace(answer)) return true; var value = answer.ToLowerInvariant(); string[] markers = ["vou executar", "posso continuar", "você pode usar", "voce pode usar", "não tenho acesso", "nao tenho acesso", "forneça o caminho", "forneca o caminho", "não diga que vai executar", "ação inicial obrigatória", "continue a solicitação original"]; return markers.Any(value.Contains);
@@ -682,7 +700,7 @@ public partial class MainWindow : Window
     {
         var memory = saved.ProjectMemories.TryGetValue(ChatKey, out var remembered) ? remembered : "Nenhuma tarefa anterior registrada.";
         var actions = saved.ProjectActions.TryGetValue(ChatKey, out var log) ? string.Join("\n", log.TakeLast(20)) : "Nenhuma ação anterior registrada.";
-        var pending = saved.AgentTasks.TryGetValue(ChatKey, out var task) ? $"Objetivo: {task.Objective}\nEstado: {task.Status}\nÚltima etapa: {task.LastStep}\nPróxima etapa: {task.NextStep}\nFerramentas usadas: {task.ToolCalls}" : "Nenhuma tarefa persistente.";
+        var pending = saved.AgentTasks.TryGetValue(TaskKey, out var task) ? $"Objetivo: {task.Objective}\nEstado: {task.Status}\nÚltima etapa: {task.LastStep}\nPróxima etapa: {task.NextStep}\nFerramentas usadas: {task.ToolCalls}" : "Nenhuma tarefa persistente.";
         return $$$"""
 Você é o agente principal de programação do AIR IA Code, desenvolvido por Codename Jackers. Tem acesso completo e exclusivo à pasta: {{{activeProject}}}
 Trabalhe de forma autônoma por quantas etapas forem necessárias. Primeiro entenda a arquitetura, depois planeje internamente, execute, observe cada retorno real, corrija falhas e valide o resultado.
@@ -709,6 +727,15 @@ MAPA ATUAL DO PROJETO
 {{{BuildProjectMap(180)}}}
 """;
     }
+    string BuildGeneralAgentContext() => $$$"""
+Você é o agente local AIR IA Code, desenvolvido por Codename Jackers, executando de verdade neste computador Windows.
+Você TEM ferramentas reais e deve usá-las. Nunca diga que não consegue executar comandos. Para pedidos como abrir, executar, verificar, listar ou mostrar algo, use run_command ou start_process e apresente o retorno real.
+O diretório atual do terminal é {{{AgentWorkingDirectory}}}. Você pode usar PowerShell, CMD, programas instalados, internet e gerenciamento de processos.
+Não há projeto vinculado a este chat. Comandos gerais do Windows são permitidos; para criar ou modificar código, peça ao usuário para selecionar um projeto apenas quando um caminho de projeto for realmente necessário.
+Observe a saída, corrija comandos que falharem e continue sozinho. Para modelos sem tool_calls nativo, emita somente um JSON por vez: {"name":"run_command","arguments":{"command":"...","timeout_seconds":300}}.
+Nunca invente uma execução: use a ferramenta e informe código de saída e resultado.
+""";
+    string AgentWorkingDirectory => activeProject is not null && Directory.Exists(activeProject) ? activeProject : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     string BuildProjectMap(int maxFiles = 250)
     {
         if (activeProject is null || !Directory.Exists(activeProject)) return "Nenhum projeto selecionado.";
@@ -718,17 +745,17 @@ MAPA ATUAL DO PROJETO
     AgentTaskState BeginOrResumeAgentTask(string objective)
     {
         var continuation = objective.Contains("continu", StringComparison.OrdinalIgnoreCase) || objective.Contains("retom", StringComparison.OrdinalIgnoreCase);
-        if (continuation && saved.AgentTasks.TryGetValue(ChatKey, out var existing) && existing.Status is "running" or "paused") { existing.Status = "running"; existing.UpdatedAt = DateTime.Now.ToString("O"); SaveState(); return existing; }
+        if (continuation && saved.AgentTasks.TryGetValue(TaskKey, out var existing) && existing.Status is "running" or "paused") { existing.Status = "running"; existing.UpdatedAt = DateTime.Now.ToString("O"); SaveState(); return existing; }
         var task = new AgentTaskState { Objective = objective, Status = "running", StartedAt = DateTime.Now.ToString("O"), UpdatedAt = DateTime.Now.ToString("O"), LastStep = "Tarefa recebida", NextStep = "Mapear e analisar o projeto" };
-        task.Timeline.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Tarefa iniciada"); saved.AgentTasks[ChatKey] = task; SaveState(); return task;
+        task.Timeline.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Tarefa iniciada"); saved.AgentTasks[TaskKey] = task; SaveState(); return task;
     }
     void CheckpointAgentTask(string step, string nextStep = "Continuar executando e validar")
     {
-        if (!saved.AgentTasks.TryGetValue(ChatKey, out var task)) return; task.LastStep = TrimText(step, 1000); task.NextStep = TrimText(nextStep, 1000); task.UpdatedAt = DateTime.Now.ToString("O"); task.ToolCalls++; task.Timeline.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {task.LastStep}"); if (task.Timeline.Count > 300) task.Timeline.RemoveRange(0, task.Timeline.Count - 300); SaveState();
+        if (!saved.AgentTasks.TryGetValue(TaskKey, out var task)) return; task.LastStep = TrimText(step, 1000); task.NextStep = TrimText(nextStep, 1000); task.UpdatedAt = DateTime.Now.ToString("O"); task.ToolCalls++; task.Timeline.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {task.LastStep}"); if (task.Timeline.Count > 300) task.Timeline.RemoveRange(0, task.Timeline.Count - 300); SaveState();
     }
     void SetAgentTaskStatus(string status, string step, string nextStep = "")
     {
-        if (!saved.AgentTasks.TryGetValue(ChatKey, out var task)) return; task.Status = status; task.LastStep = TrimText(step, 2000); task.NextStep = TrimText(nextStep, 1000); task.UpdatedAt = DateTime.Now.ToString("O"); task.Timeline.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Estado: {status} · {task.LastStep}"); SaveState();
+        if (!saved.AgentTasks.TryGetValue(TaskKey, out var task)) return; task.Status = status; task.LastStep = TrimText(step, 2000); task.NextStep = TrimText(nextStep, 1000); task.UpdatedAt = DateTime.Now.ToString("O"); task.Timeline.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Estado: {status} · {task.LastStep}"); SaveState();
     }
     string GetProjectSummary()
     {
@@ -770,7 +797,7 @@ MAPA ATUAL DO PROJETO
     }
     async Task<(int ExitCode, string Output)> RunAgentCommand(string command, int timeoutSeconds, Action<string>? onOutput = null)
     {
-        using var process = new Process { StartInfo = CreatePowerShellStartInfo(command, activeProject!) };
+        using var process = new Process { StartInfo = CreatePowerShellStartInfo(command, AgentWorkingDirectory) };
         process.Start(); var output = new StringBuilder();
         async Task ReadLive(StreamReader reader, string prefix) { string? line; while ((line = await reader.ReadLineAsync().ConfigureAwait(false)) is not null) { lock (output) output.AppendLine(prefix + line); onOutput?.Invoke(prefix + line); } }
         var outputTask = ReadLive(process.StandardOutput, ""); var errorTask = ReadLive(process.StandardError, "erro> ");
@@ -882,13 +909,13 @@ MAPA ATUAL DO PROJETO
             }
             if (name == "run_command")
             {
-                var command = Arg("command"); if (saved.ConfirmCommands && System.Windows.MessageBox.Show($"A IA quer executar no projeto:\n\n{command}", "Confirmar comando", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return "Comando recusado pelo usuário.";
+                var command = Arg("command"); if (saved.ConfirmCommands && System.Windows.MessageBox.Show($"A IA quer executar no Windows:\n\n{command}", "Confirmar comando", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return "Comando recusado pelo usuário.";
                 AddActivityStep(activity, "Executando comando"); AppendActivityOutput(activity, "> " + command); var result = await RunAgentCommand(command, IntArg("timeout_seconds", 300), line => AppendActivityOutput(activity, line)); var action = $"Comando executado (código {result.ExitCode}): {command}"; AddActivityStep(activity, action); RecordProjectAction(action); TerminalOutput.Text += $"> {command}\n{result.Output}\n[código {result.ExitCode}]\n"; return result.Output + $"\nCódigo de saída: {result.ExitCode}";
             }
             if (name == "start_process")
             {
                 var command = Arg("command"); if (saved.ConfirmCommands && System.Windows.MessageBox.Show($"A IA quer iniciar um processo no projeto:\n\n{command}", "Confirmar execução", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return "Processo recusado pelo usuário.";
-                AppendActivityOutput(activity, "> iniciar: " + command); var process = new Process { StartInfo = CreatePowerShellStartInfo(command, activeProject!), EnableRaisingEvents = true }; process.Start(); agentProcesses[process.Id] = process; agentProcessLogs[process.Id] = new StringBuilder();
+                AppendActivityOutput(activity, "> iniciar: " + command); var process = new Process { StartInfo = CreatePowerShellStartInfo(command, AgentWorkingDirectory), EnableRaisingEvents = true }; process.Start(); agentProcesses[process.Id] = process; agentProcessLogs[process.Id] = new StringBuilder();
                 void Capture(string? line) { if (line is null) return; lock (agentProcessLogs) { if (agentProcessLogs.TryGetValue(process.Id, out var log)) { log.AppendLine(line); if (log.Length > 200_000) log.Remove(0, log.Length - 150_000); } } AppendActivityOutput(activity, $"[{process.Id}] {line}"); Dispatcher.Invoke(() => TerminalOutput.Text += $"[{process.Id}] {line}\n"); }
                 process.OutputDataReceived += (_, e) => Capture(e.Data); process.ErrorDataReceived += (_, e) => Capture(e.Data); process.Exited += (_, _) => Dispatcher.Invoke(() => { Capture("processo encerrado"); agentProcesses.Remove(process.Id); }); process.BeginOutputReadLine(); process.BeginErrorReadLine(); var action = $"Processo iniciado PID {process.Id}: {command}"; AddActivityStep(activity, action); RecordProjectAction(action); return action;
             }
@@ -943,11 +970,43 @@ MAPA ATUAL DO PROJETO
         }
         catch (Exception ex) { AddActivityStep(activity, "Falha em " + ToolDisplayName(name) + ": " + ex.Message); return "Erro: " + ex.Message; }
     }
+    TextBlock CreateMessageText(string text) => new() { Text = text, TextWrapping = TextWrapping.Wrap, Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#ECEEEF")), FontSize = 14, LineHeight = 22 };
+    UIElement BuildMessageContent(string text, bool user)
+    {
+        if (user || !text.Contains("```", StringComparison.Ordinal)) return CreateMessageText(text); var panel = new StackPanel(); var regex = new System.Text.RegularExpressions.Regex("```(?<language>[^\\r\\n`]*)\\r?\\n(?<code>[\\s\\S]*?)```", System.Text.RegularExpressions.RegexOptions.CultureInvariant); var cursor = 0;
+        foreach (System.Text.RegularExpressions.Match match in regex.Matches(text)) { var before = text[cursor..match.Index].Trim(); if (!string.IsNullOrWhiteSpace(before)) panel.Children.Add(CreateMessageText(before)); panel.Children.Add(CreateCodeBlock(match.Groups["language"].Value.Trim(), match.Groups["code"].Value.TrimEnd())); cursor = match.Index + match.Length; }
+        var after = text[cursor..].Trim(); if (!string.IsNullOrWhiteSpace(after)) panel.Children.Add(CreateMessageText(after)); return panel.Children.Count == 0 ? CreateMessageText(text) : panel;
+    }
+    UIElement CreateCodeBlock(string language, string code)
+    {
+        var label = new TextBlock { Text = string.IsNullOrWhiteSpace(language) ? "CÓDIGO" : language.ToUpperInvariant(), FontSize = 9, FontWeight = FontWeights.SemiBold, Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#9FA8AD")), VerticalAlignment = VerticalAlignment.Center };
+        var copy = new System.Windows.Controls.Button { Content = "Copiar", Padding = new Thickness(9, 4, 9, 4), FontSize = 10, Background = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#2A3033")), BorderBrush = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#434B50")), Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#DFE4E6")) };
+        copy.Click += (_, _) => { try { System.Windows.Clipboard.SetText(code); copy.Content = "Copiado ✓"; } catch { copy.Content = "Falhou"; } };
+        var header = new DockPanel { Margin = new Thickness(11, 8, 8, 7) }; DockPanel.SetDock(copy, Dock.Right); header.Children.Add(copy); header.Children.Add(label);
+        var body = new System.Windows.Controls.TextBox { Text = code, IsReadOnly = true, TextWrapping = TextWrapping.NoWrap, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 300, Background = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#111416")), Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#DCE5E6")), BorderThickness = new Thickness(0), FontFamily = new Media.FontFamily("Cascadia Mono,Consolas"), FontSize = 12, Padding = new Thickness(12, 10, 12, 10), IsTabStop = false };
+        return new Border { Background = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#161A1C")), BorderBrush = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#394146")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 10, 0, 10), Child = new StackPanel { Children = { header, body } } };
+    }
     void AddMessage(string who, string text, bool user)
     {
-        var content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#ECEEEF")), FontSize = 14, LineHeight = 22 };
-        var border = new Border { Background = user ? new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#292B2C")) : Media.Brushes.Transparent, BorderBrush = user ? new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#3A3D3F")) : Media.Brushes.Transparent, BorderThickness = user ? new Thickness(1) : new Thickness(0), CornerRadius = new CornerRadius(12), Padding = user ? new Thickness(15, 12, 15, 12) : new Thickness(0, 10, 0, 14), Margin = user ? new Thickness(120, 8, 0, 8) : new Thickness(0, 4, 70, 4), Child = content };
+        var border = new Border { Background = user ? new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#292B2C")) : Media.Brushes.Transparent, BorderBrush = user ? new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#3A3D3F")) : Media.Brushes.Transparent, BorderThickness = user ? new Thickness(1) : new Thickness(0), CornerRadius = new CornerRadius(12), Padding = user ? new Thickness(15, 12, 15, 12) : new Thickness(0, 10, 0, 14), Margin = user ? new Thickness(120, 8, 0, 8) : new Thickness(0, 4, 70, 4), Child = BuildMessageContent(text, user) };
         Messages.Children.Add(border); ChatScroll.ScrollToEnd();
+    }
+    static bool ToolResultIsError(string result) => result.Contains("erro", StringComparison.OrdinalIgnoreCase) || result.Contains("falha", StringComparison.OrdinalIgnoreCase) || result.Contains("código de saída: -1", StringComparison.OrdinalIgnoreCase) || result.Contains("código de saída: 1", StringComparison.OrdinalIgnoreCase);
+    void RecordToolResult(string name, string arguments, string result)
+    {
+        if (name == "task_checkpoint") return; var summary = TrimText(result, 30_000); history.Add(new() { ["role"] = "assistant", ["type"] = "tool", ["tool"] = name, ["arguments"] = arguments, ["content"] = summary }); AddToolResultMessage(name, arguments, summary);
+    }
+    void AddToolResultMessage(string name, string arguments, string result)
+    {
+        var failed = ToolResultIsError(result); var output = TrimText(result, 8_000); var title = new TextBlock { Text = (failed ? "Falha em " : "Resultado · ") + ToolDisplayName(name), FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString(failed ? "#E6A0A0" : "#9CD6B5")) };
+        var command = new TextBlock { Text = TrimText(arguments, 500), FontFamily = new Media.FontFamily("Cascadia Mono,Consolas"), FontSize = 10, Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#859095")), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 5, 0, 6) };
+        var outputText = new TextBlock { Text = output, TextWrapping = TextWrapping.Wrap, FontFamily = new Media.FontFamily("Cascadia Mono,Consolas"), FontSize = 11, LineHeight = 17, Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#CDD4D6")), MaxHeight = 180 };
+        var outputScroll = new ScrollViewer { Content = outputText, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 180 };
+        var details = new StackPanel { Margin = new Thickness(0, 7, 0, 0), Visibility = output.Length > 900 ? Visibility.Collapsed : Visibility.Visible, Children = { outputScroll } };
+        var toggle = new System.Windows.Controls.Button { Content = output.Length > 900 ? "Ver saída" : "", Padding = new Thickness(0), Background = Media.Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#AFA3FF")), FontSize = 10, HorizontalAlignment = System.Windows.HorizontalAlignment.Left, Visibility = output.Length > 900 ? Visibility.Visible : Visibility.Collapsed };
+        toggle.Click += (_, _) => { details.Visibility = details.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible; toggle.Content = details.Visibility == Visibility.Visible ? "Ocultar saída" : "Ver saída"; };
+        var panel = new StackPanel { Children = { title, command, toggle, details } };
+        Messages.Children.Add(new Border { Background = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString(failed ? "#281D20" : "#19201E")), BorderBrush = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString(failed ? "#61363B" : "#33463C")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 7, 100, 7), Child = panel }); ChatScroll.ScrollToEnd();
     }
     void AddImageMessage(string path, string prompt)
     {
@@ -978,7 +1037,7 @@ MAPA ATUAL DO PROJETO
             mediaResultPath = path; AddImageMessage(path, imagePrompt); AddActivityStep(activity, "Imagem salva em " + path); FinishActivity(activity, "Concluído");
             history.Add(new() { ["role"] = "user", ["content"] = originalPrompt });
             history.Add(new() { ["role"] = "assistant", ["content"] = "Imagem criada localmente: " + Path.GetFileName(path), ["type"] = "image", ["path"] = path, ["prompt"] = imagePrompt });
-            saved.Chats[ChatKey] = history.Select(item => new Dictionary<string, string>(item)).ToList(); SaveState();
+            PersistCurrentChat(); SaveState();
         }
         catch (OperationCanceledException) { FinishActivity(activity, "Interrompido", true); }
         catch (Exception ex) { FinishActivity(activity, "Falha", true); AddMessage(ProductName, "Não consegui gerar a imagem: " + ex.Message, false); }
@@ -1131,18 +1190,56 @@ MAPA ATUAL DO PROJETO
     }
     void AddProject_Click(object sender, RoutedEventArgs e) { using var d = new Forms.FolderBrowserDialog { Description = "Selecione a pasta do projeto" }; if (d.ShowDialog() == Forms.DialogResult.OK) { if (!projects.Contains(d.SelectedPath)) projects.Add(d.SelectedPath); RefreshProjectsSidebar(); OpenProject(d.SelectedPath); SaveState(); } }
     void RefreshProjectsSidebar() { SidebarProjects.ItemsSource = projects.Select(Path.GetFileName).ToList(); }
-    void SidebarProjects_SelectionChanged(object sender, SelectionChangedEventArgs e) { if (SidebarProjects.SelectedIndex >= 0 && SidebarProjects.SelectedIndex < projects.Count) { var path = projects[SidebarProjects.SelectedIndex]; if (!SamePath(path, activeProject)) OpenProject(path); } }
+    void SidebarProjects_SelectionChanged(object sender, SelectionChangedEventArgs e) { if (refreshingChatSidebar) return; if (SidebarProjects.SelectedIndex >= 0 && SidebarProjects.SelectedIndex < projects.Count) { var path = projects[SidebarProjects.SelectedIndex]; if (!SamePath(path, activeProject)) OpenProject(path); } }
+    static DateTime ParseDate(string value) => DateTime.TryParse(value, out var parsed) ? parsed : DateTime.MinValue;
+    static string ChatTitle(IEnumerable<Dictionary<string, string>> messages, string fallback = "Novo chat")
+    {
+        var text = messages.FirstOrDefault(message => message.GetValueOrDefault("role") == "user")?.GetValueOrDefault("content", "").Replace('\r', ' ').Replace('\n', ' ').Trim() ?? ""; if (text.StartsWith("/imagem ", StringComparison.OrdinalIgnoreCase)) text = text[8..]; return string.IsNullOrWhiteSpace(text) ? fallback : text.Length > 42 ? text[..42] + "…" : text;
+    }
+    void RefreshChatsSidebar()
+    {
+        if (SidebarChats is null) return; refreshingChatSidebar = true;
+        var items = saved.ChatSessions.OrderByDescending(chat => ParseDate(chat.UpdatedAt)).Select(chat => new ChatNavItem(chat.Id, chat.Title, string.IsNullOrWhiteSpace(chat.ProjectPath) ? "Chat independente" : Path.GetFileName(chat.ProjectPath))).ToList(); SidebarChats.ItemsSource = items; SidebarChats.SelectedItem = items.FirstOrDefault(item => item.Id == activeChatId); refreshingChatSidebar = false; ignoreChatSelectionUntil = DateTime.UtcNow.AddMilliseconds(300);
+    }
+    void SidebarChats_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (refreshingChatSidebar || DateTime.UtcNow < ignoreChatSelectionUntil || SidebarChats.SelectedItem is not ChatNavItem item || item.Id == activeChatId) return; var session = saved.ChatSessions.FirstOrDefault(chat => chat.Id == item.Id); if (session is not null) OpenChatSession(session);
+    }
+    void DeleteChat_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true; if (sender is not System.Windows.Controls.Button button || button.Tag is not string id) return; var session = saved.ChatSessions.FirstOrDefault(chat => chat.Id == id); if (session is null) return;
+        if (System.Windows.MessageBox.Show($"Excluir o chat \"{session.Title}\"?\n\nEsta ação remove somente o histórico desta conversa.", "Excluir chat", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        var wasActive = id == activeChatId; saved.ChatSessions.Remove(session); saved.AgentTasks.Remove("__chat:" + id); if (saved.ChatSessions.Count == 0) saved.ChatSessions.Add(new ChatSession()); var next = saved.ChatSessions.OrderByDescending(chat => ParseDate(chat.UpdatedAt)).First();
+        if (wasActive) OpenChatSession(next, false); else { RefreshChatsSidebar(); SaveState(); }
+    }
+    void PersistCurrentChat()
+    {
+        if (string.IsNullOrWhiteSpace(activeChatId)) return; var session = saved.ChatSessions.FirstOrDefault(chat => chat.Id == activeChatId); if (session is null) return; session.Messages = history.Select(message => new Dictionary<string, string>(message)).ToList(); session.Title = ChatTitle(history, session.Title); session.UpdatedAt = DateTime.Now.ToString("O"); saved.ActiveChatId = activeChatId; saved.Chats[ChatKey] = session.Messages.Select(message => new Dictionary<string, string>(message)).ToList(); if (ChatPage.Visibility == Visibility.Visible) PageTitle.Text = session.Title; RefreshChatsSidebar();
+    }
+    void CreateChatSession(string projectPath, bool open)
+    {
+        PersistCurrentChat(); var session = new ChatSession { ProjectPath = projectPath, Title = string.IsNullOrWhiteSpace(projectPath) ? "Novo chat" : "Novo chat · " + Path.GetFileName(projectPath) }; saved.ChatSessions.Add(session); if (open) OpenChatSession(session, false); SaveState();
+    }
+    void OpenChatSession(ChatSession session, bool persistPrevious = true)
+    {
+        if (persistPrevious && activeChatId != session.Id) PersistCurrentChat(); activeChatId = session.Id; saved.ActiveChatId = session.Id; activeProject = Directory.Exists(session.ProjectPath) ? session.ProjectPath : null; saved.LastProject = activeProject ?? ""; history.Clear(); history.AddRange(session.Messages.Select(message => new Dictionary<string, string>(message)));
+        refreshingChatSidebar = true; SidebarProjects.SelectedIndex = activeProject is null ? -1 : projects.IndexOf(activeProject); refreshingChatSidebar = false;
+        if (activeProject is not null) { BuildTree(activeProject); ActiveProjectText.Text = Path.GetFileName(activeProject); ProjectAccessText.Text = saved.ConfirmCommands ? "Acesso ao projeto · confirmar comandos" : "Acesso total · agente autônomo"; ProjectAccessText.Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#79D7AC")); }
+        else { ActiveProjectText.Text = "Chat independente"; ProjectAccessText.Text = "Terminal e ferramentas do Windows"; ProjectAccessText.Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#A8AFB3")); }
+        RenderChat(); ShowPendingAgentTask(); RefreshChatsSidebar(); SetTab(ChatPage, session.Title, activeProject is null ? "Conversa independente · terminal e ferramentas habilitados" : $"Projeto {Path.GetFileName(activeProject)} · histórico e agente persistente"); SaveState(); PromptBox.Focus();
+    }
     string ChatKey => activeProject ?? "__general";
-    void OpenProject(string path) { activeProject = path; saved.LastProject = path; ActiveProjectText.Text = Path.GetFileName(path); ProjectAccessText.Text = saved.ConfirmCommands ? "Acesso ao projeto · confirmar comandos" : "Acesso total · agente autônomo"; ProjectAccessText.Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#79D7AC")); var projectIndex = projects.IndexOf(path); if (projectIndex >= 0 && SidebarProjects.SelectedIndex != projectIndex) SidebarProjects.SelectedIndex = projectIndex; BuildTree(path); history.Clear(); if (saved.Chats.TryGetValue(ChatKey, out var chat)) history.AddRange(chat.Select(x => new Dictionary<string, string>(x))); RenderChat(); ShowPendingAgentTask(); SetTab(ChatPage, Path.GetFileName(path), "Agente persistente · entende, modifica e valida o projeto"); SaveState(); PromptBox.Focus(); }
+    string TaskKey => activeProject ?? "__chat:" + activeChatId;
+    void OpenProject(string path) { var session = saved.ChatSessions.Where(chat => SamePath(chat.ProjectPath, path)).OrderByDescending(chat => ParseDate(chat.UpdatedAt)).FirstOrDefault(); if (session is null) { CreateChatSession(path, true); return; } OpenChatSession(session); }
     void ShowPendingAgentTask()
     {
-        if (!saved.AgentTasks.TryGetValue(ChatKey, out var task) || task.Status is not ("running" or "paused")) return;
+        if (!saved.AgentTasks.TryGetValue(TaskKey, out var task) || task.Status is not ("running" or "paused")) return;
         var info = new TextBlock { Text = $"Tarefa disponível para continuar\n{TrimText(task.Objective, 220)}\n\nÚltima etapa: {TrimText(task.LastStep, 220)}", TextWrapping = TextWrapping.Wrap, Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#C9CED1")), FontSize = 12, LineHeight = 19 };
         var resume = new System.Windows.Controls.Button { Content = "▶ Continuar tarefa", HorizontalAlignment = System.Windows.HorizontalAlignment.Left, Margin = new Thickness(0, 11, 0, 0), Padding = new Thickness(13, 7, 13, 7), Background = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#443A68")), BorderBrush = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#7463AD")) };
         resume.Click += (_, e) => { PromptBox.Text = "Continue a tarefa autônoma pendente a partir do último checkpoint. Revise o estado real, prossiga sozinho e valide completamente antes de concluir."; Send_Click(PromptBox, e); };
         Messages.Children.Add(new Border { Background = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#1C2023")), BorderBrush = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#3A4247")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(15), Margin = new Thickness(0, 12, 90, 8), Child = new StackPanel { Children = { info, resume } } });
     }
-    void RenderChat() { Messages.Children.Clear(); if (history.Count == 0) { Messages.Children.Add(new TextBlock { Text = "O que vamos construir?", FontSize = 24, FontWeight = FontWeights.SemiBold, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, Margin = new Thickness(0, 70, 0, 8) }); Messages.Children.Add(new TextBlock { Text = activeProject is null ? "Escolha um projeto e um modelo local para começar." : $"Contexto ativo: {Path.GetFileName(activeProject)}", Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#858B8E")), HorizontalAlignment = System.Windows.HorizontalAlignment.Center }); return; } foreach (var message in history) { var user = message.GetValueOrDefault("role") == "user"; if (!user && message.GetValueOrDefault("type") == "image" && message.TryGetValue("path", out var path)) AddImageMessage(path, message.GetValueOrDefault("prompt", "Imagem gerada")); else AddMessage(user ? "Você" : ProductName, message.GetValueOrDefault("content", ""), user); } }
+    void RenderChat() { Messages.Children.Clear(); if (history.Count == 0) { Messages.Children.Add(new TextBlock { Text = "O que vamos construir?", FontSize = 24, FontWeight = FontWeights.SemiBold, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, Margin = new Thickness(0, 70, 0, 8) }); Messages.Children.Add(new TextBlock { Text = activeProject is null ? "Use o chat para criar, executar e investigar. O terminal do Windows está disponível." : $"Contexto ativo: {Path.GetFileName(activeProject)}", Foreground = new Media.SolidColorBrush((Media.Color)Media.ColorConverter.ConvertFromString("#858B8E")), HorizontalAlignment = System.Windows.HorizontalAlignment.Center }); return; } foreach (var message in history) { var user = message.GetValueOrDefault("role") == "user"; if (!user && message.GetValueOrDefault("type") == "image" && message.TryGetValue("path", out var path)) AddImageMessage(path, message.GetValueOrDefault("prompt", "Imagem gerada")); else if (!user && message.GetValueOrDefault("type") == "tool") AddToolResultMessage(message.GetValueOrDefault("tool", "ferramenta"), message.GetValueOrDefault("arguments", "{}"), message.GetValueOrDefault("content", "")); else AddMessage(user ? "Você" : ProductName, message.GetValueOrDefault("content", ""), user); } }
     void BuildTree(string path) { ProjectTree.Items.Clear(); var rootNode = CreateNode(path, 0); ProjectTree.Items.Add(rootNode); rootNode.IsExpanded = true; }
     TreeViewItem CreateNode(string path, int depth) { var node = new TreeViewItem { Header = Path.GetFileName(path), Tag = path }; if (Directory.Exists(path) && depth < 5) { try { var ignored = new[] { ".git", ".gradle", ".kotlin", ".idea", "bin", "obj", "node_modules", "build", "dist", "out", "release", ".cache" }; foreach (var dir in Directory.EnumerateDirectories(path).Where(x => !ignored.Contains(Path.GetFileName(x), StringComparer.OrdinalIgnoreCase)).Take(80)) node.Items.Add(CreateNode(dir, depth + 1)); foreach (var file in Directory.EnumerateFiles(path).Take(200)) node.Items.Add(new TreeViewItem { Header = Path.GetFileName(file), Tag = file }); } catch { } } return node; }
     void ProjectTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e) { if (e.NewValue is TreeViewItem item && item.Tag is string path && File.Exists(path)) { try { var info = new FileInfo(path); if (info.Length > 2_000_000) { EditorBox.Text = "Arquivo grande demais para o editor interno."; return; } currentFile = path; CurrentFileText.Text = Path.GetFileName(path); EditorBox.Text = File.ReadAllText(path); } catch (Exception ex) { EditorBox.Text = ex.Message; } } }
@@ -1151,17 +1248,24 @@ MAPA ATUAL DO PROJETO
     async void CommandBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e) { if (e.Key == System.Windows.Input.Key.Enter) { e.Handled = true; await RunCommand(); } }
     async Task RunCommand()
     {
-        var command = CommandBox.Text.Trim(); if (string.IsNullOrWhiteSpace(command) || activeProject is null) return; if (ConfirmCommandsBox.IsChecked == true && System.Windows.MessageBox.Show($"Executar no projeto?\n\n{command}", "Confirmar comando", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        var command = CommandBox.Text.Trim(); if (string.IsNullOrWhiteSpace(command)) return; if (ConfirmCommandsBox.IsChecked == true && System.Windows.MessageBox.Show($"Executar no Windows?\n\n{command}", "Confirmar comando", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
         CommandBox.Clear(); TerminalOutput.Text += $"> {command}\n";
         try
         {
-            using var process = new Process { StartInfo = CreatePowerShellStartInfo(command, activeProject) }; process.Start();
+            using var process = new Process { StartInfo = CreatePowerShellStartInfo(command, AgentWorkingDirectory) }; process.Start();
             async Task CopyLive(StreamReader reader, string prefix) { string? line; while ((line = await reader.ReadLineAsync()) is not null) await Dispatcher.InvokeAsync(() => TerminalOutput.Text += prefix + line + "\n"); }
             var outputTask = CopyLive(process.StandardOutput, ""); var errorTask = CopyLive(process.StandardError, "erro> "); await process.WaitForExitAsync(); await Task.WhenAll(outputTask, errorTask); TerminalOutput.Text += $"[código {process.ExitCode}]\n";
         }
         catch (Exception ex) { TerminalOutput.Text += "Falha ao executar: " + ex.Message + "\n"; }
     }
-    void LoadState() { loadingSettings = true; Directory.CreateDirectory(root); try { if (File.Exists(StateFile)) saved = JsonSerializer.Deserialize<SavedState>(File.ReadAllText(StateFile)) ?? new(); } catch { saved = new(); } saved.Projects ??= new(); saved.Chats ??= new(); saved.ProjectMemories ??= new(); saved.ProjectActions ??= new(); saved.AgentTasks ??= new(); if (!int.TryParse(saved.Context, out var contextSize) || contextSize < 2048) saved.Context = "8192"; foreach (var p in saved.Projects.Where(Directory.Exists)) projects.Add(p); foreach (ComboBoxItem item in ContextBox.Items) if (item.Content?.ToString() == saved.Context) item.IsSelected = true; foreach (ComboBoxItem item in PerformanceModeBox.Items) if (item.Content?.ToString() == saved.PerformanceMode) item.IsSelected = true; if (PerformanceModeBox.SelectedIndex < 0) PerformanceModeBox.SelectedIndex = 0; foreach (ComboBoxItem item in SpeedModeBox.Items) item.IsSelected = item.Tag?.ToString() == saved.PerformanceMode; if (SpeedModeBox.SelectedIndex < 0) SpeedModeBox.SelectedIndex = 0; GpuLayersBox.Text = saved.GpuLayers; TemperatureBox.Text = saved.Temperature; MaxTokensBox.Text = saved.MaxTokens.ToString(); ConfirmCommandsBox.IsChecked = saved.ConfirmCommands; AutoStartBox.IsChecked = saved.AutoStart; MediaEndpointBox.Text = saved.MediaEndpoint; foreach (ComboBoxItem item in MediaDeviceBox.Items) item.IsSelected = item.Content?.ToString() == saved.MediaDevice; if (MediaDeviceBox.SelectedIndex < 0) MediaDeviceBox.SelectedIndex = 0; MediaWorkflowBox.Text = saved.ImageWorkflow; SetupMediaButton.Content = "Configurar " + saved.MediaDevice.Split(' ')[0]; if (saved.Chats.TryGetValue(ChatKey, out var chat)) history.AddRange(chat); RenderChat(); loadingSettings = false; }
+    void LoadState()
+    {
+        loadingSettings = true; Directory.CreateDirectory(root); try { if (File.Exists(StateFile)) saved = JsonSerializer.Deserialize<SavedState>(File.ReadAllText(StateFile)) ?? new(); } catch { saved = new(); }
+        saved.Projects ??= new(); saved.Chats ??= new(); saved.ChatSessions ??= new(); saved.ProjectMemories ??= new(); saved.ProjectActions ??= new(); saved.AgentTasks ??= new();
+        if (saved.ChatSessions.Count == 0) foreach (var legacy in saved.Chats.Where(pair => pair.Value.Count > 0)) { var project = legacy.Key == "__general" ? "" : legacy.Key; saved.ChatSessions.Add(new ChatSession { ProjectPath = project, Title = ChatTitle(legacy.Value, string.IsNullOrWhiteSpace(project) ? "Chat anterior" : Path.GetFileName(project)), Messages = legacy.Value.Select(message => new Dictionary<string, string>(message)).ToList() }); }
+        if (saved.ChatSessions.Count == 0) saved.ChatSessions.Add(new ChatSession()); if (string.IsNullOrWhiteSpace(saved.ActiveChatId) || saved.ChatSessions.All(chat => chat.Id != saved.ActiveChatId)) saved.ActiveChatId = saved.ChatSessions.OrderByDescending(chat => ParseDate(chat.UpdatedAt)).First().Id;
+        if (!int.TryParse(saved.Context, out var contextSize) || contextSize < 2048) saved.Context = "8192"; foreach (var p in saved.Projects.Where(Directory.Exists)) projects.Add(p); foreach (ComboBoxItem item in ContextBox.Items) if (item.Content?.ToString() == saved.Context) item.IsSelected = true; foreach (ComboBoxItem item in PerformanceModeBox.Items) if (item.Content?.ToString() == saved.PerformanceMode) item.IsSelected = true; if (PerformanceModeBox.SelectedIndex < 0) PerformanceModeBox.SelectedIndex = 0; foreach (ComboBoxItem item in SpeedModeBox.Items) item.IsSelected = item.Tag?.ToString() == saved.PerformanceMode; if (SpeedModeBox.SelectedIndex < 0) SpeedModeBox.SelectedIndex = 0; GpuLayersBox.Text = saved.GpuLayers; TemperatureBox.Text = saved.Temperature; MaxTokensBox.Text = saved.MaxTokens.ToString(); ConfirmCommandsBox.IsChecked = saved.ConfirmCommands; AutoStartBox.IsChecked = saved.AutoStart; MediaEndpointBox.Text = saved.MediaEndpoint; foreach (ComboBoxItem item in MediaDeviceBox.Items) item.IsSelected = item.Content?.ToString() == saved.MediaDevice; if (MediaDeviceBox.SelectedIndex < 0) MediaDeviceBox.SelectedIndex = 0; MediaWorkflowBox.Text = saved.ImageWorkflow; SetupMediaButton.Content = "Configurar " + saved.MediaDevice.Split(' ')[0]; loadingSettings = false;
+    }
     void SpeedModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (loadingSettings || SpeedModeBox.SelectedItem is not ComboBoxItem selected) return;
